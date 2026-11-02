@@ -143,3 +143,7 @@ stale claims:
   -kill -r -domain local -domain system -domain user
 bash install.sh
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
