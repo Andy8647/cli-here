@@ -40,4 +40,10 @@ if [[ $KEEP_APP -eq 0 ]]; then
   echo "removed: $APP"
 fi
 
+LINK="$HOME/.local/bin/nvim-here"
+if [[ -L "$LINK" ]]; then
+  rm -f "$LINK"
+  echo "removed: $LINK"
+fi
+
 duti -x md 2>/dev/null || true

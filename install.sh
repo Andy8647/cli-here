@@ -78,16 +78,27 @@ echo "nvim: $NVIM_BIN"
 
 # Never rebuild over an existing install unless asked: deleting the bundle makes
 # LaunchServices drop every association that points at it, which means the user
-# has to re-approve each default-app dialog from scratch.
+# has to re-approve each default-app dialog from scratch. Only the compiled
+# script is swapped, which keeps the bundle (and every approval) intact.
+build_app() {
+  local out="$1" tmp_script
+  tmp_script="$(mktemp -t nvimhere).applescript"
+  sed "s|__NVIM__|$NVIM_BIN|g" "$TEMPLATE" > "$tmp_script"
+  osacompile -o "$out" "$tmp_script"
+  rm -f "$tmp_script"
+}
+
 if [[ -d "$APP" && $FORCE_BUILD -eq 0 ]]; then
-  echo "reusing: $APP (pass --force to rebuild)"
+  tmp_root="$(mktemp -d -t nvimhere)"
+  build_app "$tmp_root/$APP_NAME.app"
+  cp "$tmp_root/$APP_NAME.app/Contents/Resources/Scripts/main.scpt" \
+    "$APP/Contents/Resources/Scripts/main.scpt"
+  rm -rf "$tmp_root"
+  echo "reusing: $APP (script patched, pass --force for a full rebuild)"
 else
   rm -rf "$APP"
   mkdir -p "$(dirname "$APP")"
-  tmp_script="$(mktemp -t nvimhere).applescript"
-  sed "s|__NVIM__|$NVIM_BIN|g" "$TEMPLATE" > "$tmp_script"
-  osacompile -o "$APP" "$tmp_script"
-  rm -f "$tmp_script"
+  build_app "$APP"
 fi
 
 plist="$APP/Contents/Info.plist"
@@ -148,6 +159,18 @@ if [[ -x "$LSREGISTER" ]]; then
 fi
 echo "built: $APP ($BUNDLE_ID)"
 sleep 1  # let LaunchServices finish ingesting the new bundle
+
+# CLI companion. Symlinked, not copied: editing bin/nvim-here takes effect
+# immediately and there is nothing to rebuild, so associations stay approved.
+BIN_DIR="$HOME/.local/bin"
+chmod +x "$HERE/bin/nvim-here"
+mkdir -p "$BIN_DIR"
+ln -sf "$HERE/bin/nvim-here" "$BIN_DIR/nvim-here"
+echo "linked: $BIN_DIR/nvim-here"
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *) echo "warn: $BIN_DIR is not in PATH; add it or call $HERE/bin/nvim-here directly" >&2 ;;
+esac
 
 if [[ $APPLY_DUTI -eq 0 ]]; then
   echo "skipped duti (--no-duti)"

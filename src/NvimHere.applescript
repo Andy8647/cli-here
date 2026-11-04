@@ -26,11 +26,18 @@ end open
 
 on openInNvim(paths)
 	set cmd to "__NVIM__"
+	set label to "nvim"
 	if (count of paths) > 0 then
 		set cmd to cmd & " --"
 		repeat with p in paths
 			set cmd to cmd & " " & quoted form of p
 		end repeat
+		-- Tab title. Nothing here runs a shell, so Ghostty's shell integration never
+		-- reports one and the tab would sit on the 👻 placeholder forever.
+		set label to my basename(item 1 of paths)
+		if (count of paths) > 1 then
+			set label to label & " +" & ((count of paths) - 1)
+		end if
 	end if
 
 	tell application "Ghostty"
@@ -45,10 +52,21 @@ on openInNvim(paths)
 		if w is missing value then
 			new window with configuration cfg
 		else
-			new tab in w with configuration cfg
+			set newTab to new tab in w with configuration cfg
+			set name override of newTab to label
 		end if
 	end tell
 end openInNvim
+
+on basename(p)
+	set AppleScript's text item delimiters to "/"
+	set parts to text items of p
+	set AppleScript's text item delimiters to ""
+	if (count of parts) > 1 and last item of parts is "" then
+		return item -2 of parts
+	end if
+	return last item of parts
+end basename
 
 on logError(msg)
 	try
