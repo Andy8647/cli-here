@@ -33,6 +33,13 @@ if command -v duti >/dev/null; then
     duti -s "$TARGET" "$ext" all || true
   done
   echo "associations restored to $TARGET"
+
+  # Folders go back to Finder, never to $TARGET: this app only ever claimed
+  # them as an opt-in, and handing `open .` to an editor would be a surprise.
+  if duti -d public.folder 2>/dev/null | grep -q "dev.andy.nvimhere"; then
+    duti -s com.apple.finder public.folder all || true
+    echo "public.folder restored to com.apple.finder"
+  fi
 fi
 
 if [[ $KEEP_APP -eq 0 ]]; then
@@ -40,10 +47,12 @@ if [[ $KEEP_APP -eq 0 ]]; then
   echo "removed: $APP"
 fi
 
-LINK="$HOME/.local/bin/nvim-here"
-if [[ -L "$LINK" ]]; then
-  rm -f "$LINK"
-  echo "removed: $LINK"
-fi
+for link in cli-here nvim-here; do
+  LINK="$HOME/.local/bin/$link"
+  if [[ -L $LINK ]]; then
+    rm -f "$LINK"
+    echo "removed: $LINK"
+  fi
+done
 
 duti -x md 2>/dev/null || true

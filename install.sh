@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Build and install NvimHere.app, then point file associations at it.
 #
-#   ./install.sh            # build + register + apply associations
-#   ./install.sh --no-duti  # build + register only, no association changes
+#   ./install.sh                 # build + register + apply associations
+#   ./install.sh --no-duti       # build + register only, no association changes
+#   ./install.sh --claim-folders # also make the app the handler for folders
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,11 +14,14 @@ TEMPLATE="$HERE/src/$APP_NAME.applescript"
 
 APPLY_DUTI=1
 FORCE_BUILD=0
+CLAIM_FOLDERS=0
 for arg in "$@"; do
   case "$arg" in
     --no-duti) APPLY_DUTI=0 ;;
     --force) FORCE_BUILD=1 ;;
     --no-build) FORCE_BUILD=0 ;;
+    --claim-folders) CLAIM_FOLDERS=1 ;;
+    --no-claim-folders) CLAIM_FOLDERS=2 ;;
   esac
 done
 
@@ -69,21 +73,48 @@ if [[ " ${UTIS[*]} " == *" public.html "* ]]; then
   exit 1
 fi
 
-NVIM_BIN="$(command -v nvim || true)"
-if [[ -z "$NVIM_BIN" ]]; then
-  echo "error: nvim not found in PATH" >&2
-  exit 1
+# nvim is no longer required to install: the app only forwards to cli-here, and
+# the rule table decides what runs. Without nvim the default rule will fail when
+# it fires, which is a runtime problem with a clear message.
+if ! command -v nvim >/dev/null; then
+  echo "warn: nvim is not in PATH; the built-in rule will not be able to run" >&2
 fi
-echo "nvim: $NVIM_BIN"
 
 # Never rebuild over an existing install unless asked: deleting the bundle makes
 # LaunchServices drop every association that points at it, which means the user
 # has to re-approve each default-app dialog from scratch. Only the compiled
 # script is swapped, which keeps the bundle (and every approval) intact.
+#
+# sed cannot inject these values safely: | is the delimiter, & expands to the
+# match, and a " would end the AppleScript string literal.
+check_value() {
+  local name=$1 value=$2 bad
+  for bad in '|' '&' '"'; do
+    case $value in
+      *"$bad"*)
+        echo "error: $name contains $bad, which the installer cannot substitute safely" >&2
+        exit 1 ;;
+    esac
+  done
+}
+
+CLI_HERE_BIN="$HERE/bin/cli-here"
+NVIM_HERE_BIN="$HERE/bin/nvim-here"
+INSTALL_PATH=${PATH:-/usr/bin:/bin}
+INSTALL_EDITOR=${EDITOR:-}
+check_value PATH "$INSTALL_PATH"
+check_value EDITOR "$INSTALL_EDITOR"
+check_value "cli-here" "$CLI_HERE_BIN"
+check_value "nvim-here" "$NVIM_HERE_BIN"
+
 build_app() {
   local out="$1" tmp_script
   tmp_script="$(mktemp -t nvimhere).applescript"
-  sed "s|__NVIM__|$NVIM_BIN|g" "$TEMPLATE" > "$tmp_script"
+  sed -e "s|__CLI_HERE__|$CLI_HERE_BIN|g" \
+    -e "s|__NVIM_HERE__|$NVIM_HERE_BIN|g" \
+    -e "s|__PATH__|$INSTALL_PATH|g" \
+    -e "s|__EDITOR__|$INSTALL_EDITOR|g" \
+    "$TEMPLATE" >"$tmp_script"
   osacompile -o "$out" "$tmp_script"
   rm -f "$tmp_script"
 }
@@ -134,6 +165,19 @@ for i in "${!EXTS[@]}"; do
   pb "Add :CFBundleDocumentTypes:1:CFBundleTypeExtensions:$i string ${EXTS[$i]}"
 done
 
+# public.folder is opt-in. Claiming it changes what `open .` and every app's
+# "reveal in Finder" does for the whole system, which is a far bigger blast
+# radius than "this file opens in nvim". Rank Alternate, not Owner: Owner on a
+# type this broad would outrank every other claim.
+if [[ $CLAIM_FOLDERS -eq 1 ]]; then
+  pb "Add :CFBundleDocumentTypes:2 dict"
+  pb "Add :CFBundleDocumentTypes:2:CFBundleTypeName string Folder"
+  pb "Add :CFBundleDocumentTypes:2:CFBundleTypeRole string Viewer"
+  pb "Add :CFBundleDocumentTypes:2:LSHandlerRank string Alternate"
+  pb "Add :CFBundleDocumentTypes:2:LSItemContentTypes array"
+  pb "Add :CFBundleDocumentTypes:2:LSItemContentTypes:0 string public.folder"
+fi
+
 # Icon. Copied in place rather than requiring a rebuild: deleting the bundle
 # drops every association that points at it.
 ICON_SRC="$HERE/assets/nvim.icns"
@@ -160,13 +204,16 @@ fi
 echo "built: $APP ($BUNDLE_ID)"
 sleep 1  # let LaunchServices finish ingesting the new bundle
 
-# CLI companion. Symlinked, not copied: editing bin/nvim-here takes effect
-# immediately and there is nothing to rebuild, so associations stay approved.
+# CLI companions. Symlinked, not copied: editing bin/ takes effect immediately
+# and there is nothing to rebuild, so associations stay approved. Both names
+# point at the same file; which one you call decides whether the rule table is
+# read ($0 basename is the switch).
 BIN_DIR="$HOME/.local/bin"
-chmod +x "$HERE/bin/nvim-here"
+chmod +x "$HERE/bin/cli-here"
 mkdir -p "$BIN_DIR"
+ln -sf "$HERE/bin/cli-here" "$BIN_DIR/cli-here"
 ln -sf "$HERE/bin/nvim-here" "$BIN_DIR/nvim-here"
-echo "linked: $BIN_DIR/nvim-here"
+echo "linked: $BIN_DIR/cli-here, $BIN_DIR/nvim-here"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) echo "warn: $BIN_DIR is not in PATH; add it or call $HERE/bin/nvim-here directly" >&2 ;;
@@ -187,6 +234,22 @@ fi
 for uti in "${UTIS[@]}"; do
   duti -s "$BUNDLE_ID" "$uti" all || echo "warn: $uti" >&2
 done
+
+# Folder claiming is decided by what LaunchServices currently says, not by a
+# state file: this script rebuilds the plist every run, so a remembered flag
+# would drift from reality.
+if [[ $CLAIM_FOLDERS -eq 1 ]]; then
+  duti -s "$BUNDLE_ID" public.folder all || echo "warn: public.folder" >&2
+  echo "claimed: public.folder -> $BUNDLE_ID (undo: ./install.sh --no-claim-folders)"
+elif duti -d public.folder 2>/dev/null | grep -q "$BUNDLE_ID"; then
+  if [[ $CLAIM_FOLDERS -eq 2 ]]; then
+    duti -s com.apple.finder public.folder all || true
+    echo "released: public.folder -> com.apple.finder"
+  else
+    echo "note: public.folder is still claimed by $BUNDLE_ID from an earlier run" >&2
+    echo "      release it with: ./install.sh --no-claim-folders" >&2
+  fi
+fi
 
 echo
 echo "spot check:"

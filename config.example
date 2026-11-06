@@ -1,0 +1,60 @@
+# cli-here rule table. Copy to ~/.config/cli-here/config and edit.
+#
+#   MATCHER => ACTION
+#
+# One rule per line. First match wins, top to bottom, so put specific patterns
+# above broad ones. Lines starting with # are comments. Without this file
+# cli-here behaves exactly like nvim-here.
+#
+# MATCHERS
+#   dir                 a directory (symlinks followed)
+#   noext               a file with no extension: Makefile, .gitignore, trail.
+#   ext:md,ts,tsx       extension, case-insensitive; foo.d.ts counts as ts
+#   glob:**/db/*.sql    glob against the absolute path
+#                         *   does not cross a /
+#                         **  does, and **/ also matches zero directories
+#                         ?   exactly one character
+#                       a pattern that starts with neither / nor ~/ matches at
+#                       any depth, so `glob:Makefile` is the same as
+#                       `glob:**/Makefile`
+#   *                   anything; keep it last
+#
+# ACTIONS
+#   nvim {loc}          run it in a new Ghostty tab (or split, or window)
+#   @run cmd {files}    run it here, without a terminal, and wait for it.
+#                       Meant for commands that return quickly.
+#   @open               hand the paths to whatever app the system would use.
+#                       If that app is NvimHere itself, cli-here falls back to
+#                       nvim instead of opening itself in a loop.
+#
+# PLACEHOLDERS
+#   {files}   every path of the group, one argument each. Must stand alone.
+#   {file}    one path; makes the action run once per file
+#   {loc}     path, path:LINE or path:LINE:COL, for `hx {loc}` and friends
+#   {line}    the line number. An argument containing it disappears entirely
+#             when there is no line, which is what makes `+{line}` safe.
+#   {col}     the same for the column
+#   {dir}     the working directory: -C, or the folder of the file that was
+#             opened when the click came from Finder
+#
+# Quoting: single and double quotes group words, nothing else. No escapes, no
+# variable expansion, and a file name can never turn into extra arguments.
+
+# SQL migrations are read-only, and still jump to the line.
+glob:**/migrations/*.sql      => nvim -R +{line} -- {files}
+
+# Source files: one tab for the whole group, jumping to the first one's line.
+ext:swift,ts,tsx,py,md,json   => nvim +{line} '+call cursor({line},{col})' -- {files}
+
+# Extension-less scripts and dotfiles are text too.
+noext                         => nvim +{line} -- {files}
+
+# A directory opens the file manager.
+dir                           => yazi {files}
+
+# PDFs are not text: no terminal, just Preview.
+ext:pdf                       => @run open -a Preview {files}
+
+# Everything else: whatever the system would have opened. Because .md, .txt and
+# the rest already point at NvimHere, this comes back as nvim with a note.
+*                             => @open

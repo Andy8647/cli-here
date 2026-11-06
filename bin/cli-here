@@ -1,0 +1,1009 @@
+#!/usr/bin/env bash
+# cli-here: open a new Ghostty surface running a tool for the paths you pass.
+#
+# `nvim-here` is the same program with the rule table switched off: it never
+# reads a config file and always runs nvim. `cli-here` reads
+# ~/.config/cli-here/config and picks a rule per path; with no config file it
+# behaves exactly like nvim-here.
+#
+#   nvim-here                        # nvim, cd'd to the caller's cwd
+#   nvim-here src/foo.ts:42          # jump to line 42
+#   nvim-here src/foo.ts:42:7        # ...and column 7
+#   nvim-here -C ~/repo a.md b.py    # cd first, open two files
+#   nvim-here --new-window src/foo.ts
+#   nvim-here --split=down src/foo.ts  # split the focused pane instead of a tab
+#   nvim-here -b src/foo.ts          # create it without taking the keyboard
+#   nvim-here --dry-run src/foo.ts   # print the plan, open nothing
+#
+# A line spec always belongs to the first file: nvim runs its `+cmd` after the
+# first buffer is loaded, so `a.md:10 b.py:20` jumps in a.md and ignores :20.
+#
+# Work happens in two phases. build_plan() only reads (stats paths, resolves
+# tools) and fills the PLAN_* arrays; execute_plan() is the only code that
+# touches the system. --dry-run stops between them, which is why it doubles as
+# a config checker.
+set -euo pipefail
+
+PROG=$(basename "$0")
+
+usage() {
+  cat <<USAGE
+usage: $PROG [-C DIR] [-w | --split[=DIR]] [-b] [--hold] [--dry-run] [--] [FILE[:LINE[:COL]]...]
+
+  -C, --dir DIR    cd into DIR before starting nvim (default: current directory)
+  -w, --new-window open a new window instead of a new tab
+  -s, --split[=DIR] split the focused pane instead of opening a tab;
+                   DIR is right (default, like Cmd+D), down, left or up
+  -b, --background create the surface without taking the keyboard: a tab stays
+                   unselected, a split hands focus back to the original pane
+  -n, --dry-run    print the plan instead of opening anything
+  --hold           keep the surface open after the command exits, so a tool
+                   that crashes on startup leaves its output on screen
+  -h, --help       this text
+
+No FILE arguments opens nvim with an empty buffer.
+FILE may be a directory. Paths are passed to nvim as absolute paths.
+USAGE
+}
+
+MODE=tab
+SPLIT_DIR=right
+BG=0
+HOLD=0
+DRY_RUN=0
+# Set by the app: a LaunchServices launch has no working directory worth
+# keeping, and the paths arrive absolute.
+FROM_LS=0
+DIR="$PWD"
+SPECS=()
+
+# What a surface is told about its environment. See build_surface_env.
+SURFACE_PATH_ASSIGN=""
+SURFACE_EDITOR_ASSIGN=""
+# What goes in `initial working directory`. Empty means "leave it to Ghostty".
+SURFACE_CWD=""
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -C|--dir)
+        [[ $# -ge 2 ]] || { echo "$PROG: $1 needs a value" >&2; exit 2; }
+        DIR="$2"; shift 2 ;;
+      -w|--new-window)
+        [[ "$MODE" == split ]] && { echo "$PROG: --new-window conflicts with --split" >&2; exit 2; }
+        MODE=window; shift ;;
+      -s|--split)
+        [[ "$MODE" == window ]] && { echo "$PROG: --split conflicts with --new-window" >&2; exit 2; }
+        MODE="split"; shift ;;
+      --split=*)
+        [[ "$MODE" == window ]] && { echo "$PROG: --split conflicts with --new-window" >&2; exit 2; }
+        MODE="split"; SPLIT_DIR="${1#--split=}"; shift ;;
+      -b|--background) BG=1; shift ;;
+      --hold) HOLD=1; shift ;;
+      --from-ls) FROM_LS=1; shift ;;
+      -n|--dry-run) DRY_RUN=1; shift ;;
+      --) shift; while [[ $# -gt 0 ]]; do SPECS+=("$1"); shift; done ;;
+      -*) echo "$PROG: unknown option: $1 (pass -- before files starting with -)" >&2; exit 2 ;;
+      *) SPECS+=("$1"); shift ;;
+    esac
+  done
+
+  case "$SPLIT_DIR" in
+    right|left|up|down) ;;
+    *) echo "$PROG: unknown split direction: $SPLIT_DIR (right, left, up, down)" >&2; exit 2 ;;
+  esac
+}
+
+# Resolve one FILE[:LINE[:COL]] argument to an absolute path, filling
+# PATHSPEC / LINE / COL.
+#
+# Tried in order: the argument as-is (i.e. relative to the caller's cwd), then
+# relative to -C DIR, each both whole and with the line suffix split off. Only
+# split when the bare path exists, so a filename that really contains colons
+# (test:2024.log) survives.
+resolve_spec() {
+  local spec="$1" bare line="" col="" base cand
+  PATHSPEC=""
+  LINE=""
+  COL=""
+
+  # shellcheck disable=SC2088  # matching the literal prefix, not expanding
+  if [[ "$spec" == "~/"* ]]; then
+    spec="$HOME/${spec#\~/}"
+  fi
+
+  for base in "$PWD" "$DIR"; do
+    cand="$spec"
+    if [[ "$cand" != /* ]]; then cand="$base/$spec"; fi
+    if [[ -e "$cand" ]]; then
+      PATHSPEC="$cand"
+      return 0
+    fi
+  done
+
+  bare="$spec"
+  if [[ "$spec" =~ ^(.*):([0-9]+):([0-9]+)$ ]]; then
+    bare="${BASH_REMATCH[1]}"; line="${BASH_REMATCH[2]}"; col="${BASH_REMATCH[3]}"
+  elif [[ "$spec" =~ ^(.*):([0-9]+)$ ]]; then
+    bare="${BASH_REMATCH[1]}"; line="${BASH_REMATCH[2]}"
+  fi
+
+  if [[ -n "$line" ]]; then
+    for base in "$PWD" "$DIR"; do
+      cand="$bare"
+      if [[ "$cand" != /* ]]; then cand="$base/$bare"; fi
+      if [[ -e "$cand" ]]; then
+        PATHSPEC="$cand"
+        LINE="$line"
+        COL="$col"
+        return 0
+      fi
+    done
+  fi
+
+  # Not on disk: pass it through untouched so nvim can create it.
+  if [[ "$spec" != /* ]]; then spec="$PWD/$spec"; fi
+  PATHSPEC="$spec"
+}
+
+# --- templates ------------------------------------------------------------
+#
+# A rule's action is a command template. Turning it into argv takes two passes,
+# and the order is the whole point: tokenize first, substitute second. A file
+# name is inserted as one finished argument, so it can never be re-parsed into
+# extra arguments, and nothing here goes through eval.
+#
+# Only single and double quotes group words. There are no escapes and no
+# expansions, so a backslash is a literal backslash.
+TOKS=()
+TOKENIZE_ERROR=""
+
+tokenize() {
+  local s=$1 ch cur="" in_word=0 quote="" i=0 n=${#1}
+  TOKS=()
+  TOKENIZE_ERROR=""
+  while ((i < n)); do
+    ch=${s:i:1}
+    if [[ -n $quote ]]; then
+      if [[ $ch == "$quote" ]]; then quote=""; else cur+=$ch; fi
+    elif [[ $ch == "'" || $ch == '"' ]]; then
+      quote=$ch
+      in_word=1
+    elif [[ $ch == " " || $ch == $'\t' ]]; then
+      if ((in_word)); then TOKS+=("$cur"); cur=""; in_word=0; fi
+    else
+      cur+=$ch
+      in_word=1
+    fi
+    i=$((i + 1))
+  done
+  if [[ -n $quote ]]; then
+    TOKENIZE_ERROR="unterminated $quote"
+    return 1
+  fi
+  if ((in_word)); then TOKS+=("$cur"); fi
+  return 0
+}
+
+PLACEHOLDERS=" file files loc line col dir "
+PH_NAMES=()
+SCAN_ERROR=""
+
+# Collect the {name} placeholders in one token. Only an all-lowercase name can
+# be a placeholder, so `{a=1}` and `{}` stay literal braces; an unknown
+# lowercase name is a typo and is reported instead of silently doing nothing.
+scan_placeholders() {
+  local s=$1 name
+  PH_NAMES=()
+  SCAN_ERROR=""
+  while [[ $s == *'{'* ]]; do
+    s=${s#*\{}
+    [[ $s == *'}'* ]] || return 0
+    name=${s%%\}*}
+    s=${s#*\}}
+    [[ $name =~ ^[a-z]+$ ]] || continue
+    if [[ $PLACEHOLDERS != *" $name "* ]]; then
+      SCAN_ERROR="unknown placeholder {$name}"
+      return 1
+    fi
+    PH_NAMES+=("$name")
+  done
+  return 0
+}
+
+VALIDATE_ERROR=""
+
+# Rejects templates that cannot mean what they look like. Called when a config
+# is loaded, so the message can carry a line number, and on the built-in rule.
+validate_template() {
+  local tok p has_file has_line
+  VALIDATE_ERROR=""
+  for tok in ${TOKS[@]+"${TOKS[@]}"}; do
+    if [[ $tok == *'{files}'* && $tok != '{files}' ]]; then
+      VALIDATE_ERROR="{files} has to be an argument on its own"
+      return 1
+    fi
+    if ! scan_placeholders "$tok"; then
+      VALIDATE_ERROR=$SCAN_ERROR
+      return 1
+    fi
+    has_file=0
+    has_line=0
+    for p in ${PH_NAMES[@]+"${PH_NAMES[@]}"}; do
+      case $p in
+        file) has_file=1 ;;
+        line|col) has_line=1 ;;
+      esac
+    done
+    if ((has_file && has_line)); then
+      # `{file}:{line}` would delete the path along with the line when there is
+      # no line, which is a silent wrong-file bug. {loc} is the way to say it.
+      VALIDATE_ERROR="{file} cannot share an argument with {line} or {col}; use {loc}"
+      return 1
+    fi
+  done
+  return 0
+}
+
+EXPANDED=()
+
+expand_template() {
+  local line=$1 col=$2 dir=$3
+  shift 3
+  local tok out s name
+  EXPANDED=()
+  for tok in ${TOKS[@]+"${TOKS[@]}"}; do
+    if [[ $tok == '{files}' ]]; then
+      if [[ $# -gt 0 ]]; then EXPANDED+=("$@"); fi
+      continue
+    fi
+    if [[ $tok == *'{line}'* && -z $line ]] || [[ $tok == *'{col}'* && -z $col ]] \
+      || [[ $# -eq 0 && ($tok == *'{file}'* || $tok == *'{loc}'*) ]]; then
+      continue
+    fi
+    out=""
+    s=$tok
+    while [[ $s == *'{'* ]]; do
+      out+=${s%%\{*}
+      s=${s#*\{}
+      if [[ $s != *'}'* ]]; then
+        out+='{'
+        break
+      fi
+      name=${s%%\}*}
+      s=${s#*\}}
+      case $name in
+        file) out+=$1 ;;
+        loc)  out+=$1${line:+:$line}${col:+:$col} ;;
+        line) out+=$line ;;
+        col)  out+=$col ;;
+        dir)  out+=$dir ;;
+        # Not a placeholder: put the braces back and keep going.
+        *)    out+="{$name}" ;;
+      esac
+    done
+    EXPANDED+=("$out$s")
+  done
+  return 0
+}
+
+# --- the plan -------------------------------------------------------------
+#
+# One entry per thing execute_plan() will do. Attributes live in parallel
+# arrays because bash 3.2 has no nested ones; each entry's argv is a slice of
+# the flat PLAN_ARGV, addressed by PLAN_ARGV_OFF and PLAN_ARGV_N. argv[0] is
+# always the resolved absolute path of the tool, never a bare command name.
+PLAN_KIND=()     # surface | run | open
+PLAN_MODE=()     # tab | window | split
+PLAN_SPLIT=()    # right | left | up | down
+PLAN_BG=()
+PLAN_HOLD=()
+PLAN_CWD=()
+PLAN_LABEL=()
+PLAN_RULE=()
+PLAN_ARGV_OFF=()
+PLAN_ARGV_N=()
+PLAN_ARGV=()
+
+# plan_add KIND MODE SPLIT BG HOLD CWD LABEL RULE [--] ARGV...
+plan_add() {
+  PLAN_KIND+=("$1"); PLAN_MODE+=("$2"); PLAN_SPLIT+=("$3"); PLAN_BG+=("$4")
+  PLAN_HOLD+=("$5"); PLAN_CWD+=("$6"); PLAN_LABEL+=("$7"); PLAN_RULE+=("$8")
+  shift 8
+  [[ ${1-} == "--" ]] && shift
+  PLAN_ARGV_OFF+=("${#PLAN_ARGV[@]}")
+  PLAN_ARGV_N+=("$#")
+  PLAN_ARGV+=("$@")
+}
+
+# Resolves every spec into PATHS, keeping each one's :LINE/:COL next to it.
+# A line number belongs to the first file of the group that file lands in, which
+# is not known until the rules have been matched, so it cannot be collapsed into
+# one value here.
+PATHS=()
+SPEC_LINE=()
+SPEC_COL=()
+
+plan_paths() {
+  local spec
+  PATHS=()
+  SPEC_LINE=()
+  SPEC_COL=()
+  for spec in ${SPECS[@]+"${SPECS[@]}"}; do
+    resolve_spec "$spec"
+    PATHS+=("$PATHSPEC")
+    SPEC_LINE+=("$LINE")
+    SPEC_COL+=("$COL")
+  done
+}
+
+note() { echo "$PROG: note: $*" >&2; }
+
+# A surface inherits Ghostty's minimal GUI environment, so a tool started from it
+# (yazi's opener, `:!` in nvim) would not find its helpers. Only PATH and
+# EDITOR are passed: forwarding the whole environment would hand every secret in
+# the caller's shell to every surface. An empty value is passed as an empty
+# string, which the AppleScript skips instead of setting.
+build_surface_env() {
+  SURFACE_PATH_ASSIGN=""
+  SURFACE_EDITOR_ASSIGN=""
+  if [[ -n ${PATH:-} ]]; then SURFACE_PATH_ASSIGN="PATH=$PATH"; fi
+  if [[ -n ${EDITOR:-} ]]; then SURFACE_EDITOR_ASSIGN="EDITOR=$EDITOR"; fi
+}
+
+# The built-in rule, which is the whole of nvim-here and the fallback for
+# cli-here without a config file. It is an ordinary template on purpose: the
+# built-in path and the configured path run through the same machinery, so
+# there is nothing to keep in sync.
+#
+# nvim runs each `+cmd` in order, so the line jump lands first and the exact
+# column second. With no line and no column both tokens disappear; with no
+# files, {files} contributes nothing.
+BUILTIN_ACTION="nvim +{line} '+call cursor({line},{col})' -- {files}"
+
+# Turn one action template into ARGV, with argv[0] an absolute tool path.
+# LINE/COL belong to the file this action is built for; empty means the entry
+# has none, which is what makes `+{line}` disappear.
+build_action() {
+  local template=$1 line=$2 col=$3 dir=$4
+  shift 4
+  if ! tokenize "$template"; then
+    echo "$PROG: $TOKENIZE_ERROR" >&2
+    exit 2
+  fi
+  if ! validate_template; then
+    echo "$PROG: $VALIDATE_ERROR" >&2
+    exit 2
+  fi
+  expand_template "$line" "$col" "$dir" "$@"
+  if [[ ${#EXPANDED[@]} -eq 0 ]]; then
+    echo "$PROG: action expands to nothing: $template" >&2
+    exit 2
+  fi
+  ARGV=("${EXPANDED[@]}")
+
+  # type -P forces a PATH lookup and returns an absolute path, so a shell
+  # function or alias as the first word can never be picked up. Doing it here,
+  # while the plan is built, means a missing tool fails before anything opens.
+  local tool
+  tool="$(type -P "${ARGV[0]}" || true)"
+  if [[ -z $tool ]]; then
+    echo "$PROG: ${ARGV[0]} not found in PATH" >&2
+    exit 1
+  fi
+  ARGV[0]=$tool
+}
+
+# --- rules ----------------------------------------------------------------
+#
+# nvim-here always runs the single built-in rule; cli-here replaces it with
+# whatever the config file says, plus an implicit `* => @open`.
+CONFIG_PATH=${CLI_HERE_CONFIG:-$HOME/.config/cli-here/config}
+
+RULE_MATCH=()   # dir | noext | ext | glob | any
+RULE_ARG=()     # ext: ",a,b,"   glob: an anchored ERE
+RULE_MODE=()    # surface | run | open
+RULE_CMD=()     # the command template, empty for open
+RULE_NAME=()    # builtin | config:7 | implicit
+MATCHED=-1
+RULES_FROM_CONFIG=0
+
+config_error() { # config_error LINE MESSAGE
+  echo "$PROG: $CONFIG_PATH:$1: $2" >&2
+  exit 2
+}
+
+# Anchored ERE for one glob. `*` never crosses a slash, `**` does, and a
+# pattern that starts with neither / nor ~/ is implicitly "in any directory".
+glob_to_regex() {
+  local g=$1 out="" i=0 n c specials='.^$*+?()[]{}|'
+
+  # shellcheck disable=SC2088  # matching the literal prefix, then swapping it
+  if [[ $g == '~/'* ]]; then
+    g=$HOME/${g#\~/}
+  elif [[ $g != /* && $g != '**/'* ]]; then
+    # Implicit "in any directory", unless the pattern already says it.
+    out='(.*/)?'
+  fi
+
+  n=${#g}
+  while ((i < n)); do
+    c=${g:i:1}
+    case $c in
+      '*')
+        if [[ ${g:i:3} == '**/' ]]; then out+='(.*/)?'; i=$((i + 3)); continue; fi
+        if [[ ${g:i:2} == '**' ]]; then out+='.*'; i=$((i + 2)); continue; fi
+        out+='[^/]*' ;;
+      '?') out+='[^/]' ;;
+      *)
+        if [[ $c == \\ || $specials == *"$c"* ]]; then out+="\\$c"; else out+=$c; fi ;;
+    esac
+    i=$((i + 1))
+  done
+  printf '^%s$' "$out"
+}
+
+# Reads CONFIG_PATH into the RULE_* arrays. Any problem rejects the whole file:
+# skipping one bad rule would let the rules below it catch files that were never
+# meant for them, which routes silently to the wrong app.
+load_rules() {
+  local line spec action mode cmd arg n=0
+
+  if [[ $PROG == nvim-here || ! -f $CONFIG_PATH ]]; then
+    # No config, or the escape hatch: exactly what nvim-here has always done.
+    RULE_MATCH=(any); RULE_ARG=(""); RULE_MODE=(surface)
+    RULE_CMD=("$BUILTIN_ACTION"); RULE_NAME=(builtin)
+    return 0
+  fi
+
+  RULES_FROM_CONFIG=1
+  while IFS= read -r line || [[ -n $line ]]; do
+    n=$((n + 1))
+    line=${line%$'\r'}
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
+    case $line in '' | '#'*) continue ;; esac
+
+    [[ $line == *' => '* ]] ||
+      config_error "$n" "expected ' => ' between the matcher and the action"
+    spec=${line%%' => '*}
+    spec=${spec%"${spec##*[![:space:]]}"}
+    action=${line#*' => '}
+    action=${action#"${action%%[![:space:]]*}"}
+
+    case $spec in
+      dir) RULE_MATCH+=(dir); RULE_ARG+=("") ;;
+      noext) RULE_MATCH+=(noext); RULE_ARG+=("") ;;
+      '*') RULE_MATCH+=(any); RULE_ARG+=("") ;;
+      ext:*)
+        arg=${spec#ext:}
+        arg=${arg// /}
+        [[ -n $arg ]] || config_error "$n" "ext: needs at least one extension"
+        RULE_MATCH+=(ext); RULE_ARG+=(",$arg,") ;;
+      glob:*)
+        arg=${spec#glob:}
+        [[ -n $arg ]] || config_error "$n" "glob: needs a pattern"
+        RULE_MATCH+=(glob); RULE_ARG+=("$(glob_to_regex "$arg")") ;;
+      *)
+        config_error "$n" \
+          "unknown matcher: $spec (expected dir, noext, ext:..., glob:..., or *)" ;;
+    esac
+
+    mode=surface
+    cmd=$action
+    case $action in
+      '@open') mode=open; cmd="" ;;
+      '@open '*) config_error "$n" "@open takes no arguments" ;;
+      '@run '*) mode=run; cmd=${action#@run } ;;
+      '@'*) config_error "$n" "unknown action: ${action%% *}" ;;
+      open | 'open '*)
+        # The handler for these types is this app, so a bare open would come
+        # straight back here. @open checks the handler before it runs anything.
+        config_error "$n" "bare open would call back into this app; write @open" ;;
+    esac
+
+    if [[ $mode != open ]]; then
+      tokenize "$cmd" || config_error "$n" "$TOKENIZE_ERROR"
+      [[ ${#TOKS[@]} -gt 0 ]] || config_error "$n" "the action is empty"
+      validate_template || config_error "$n" "$VALIDATE_ERROR"
+    fi
+
+    RULE_MODE+=("$mode")
+    RULE_CMD+=("$cmd")
+    RULE_NAME+=("config:$n")
+  done <"$CONFIG_PATH"
+
+  # A path that matches nothing goes to the system rather than to nvim: with a
+  # rule table, guessing a tool would silently override every rule written.
+  RULE_MATCH+=(any); RULE_ARG+=(""); RULE_MODE+=(open)
+  RULE_CMD+=(""); RULE_NAME+=(implicit)
+}
+
+# First match wins, top to bottom. No "most specific" scoring: when two rules
+# both match there is no sharp answer, and an explicit order is easier to
+# predict and to debug than a ranking.
+match_rule() {
+  local p=${1%/} i is_dir=0 base ext="" re
+  [[ -d $p ]] && is_dir=1
+  base=${p##*/}
+  if ((!is_dir)) && [[ $base == ?*.?* ]]; then ext=${base##*.}; fi
+
+  for ((i = 0; i < ${#RULE_MATCH[@]}; i++)); do
+    case "${RULE_MATCH[i]}" in
+      dir) ((is_dir)) && { MATCHED=$i; return 0; } ;;
+      noext) ((!is_dir)) && [[ -z $ext ]] && { MATCHED=$i; return 0; } ;;
+      ext)
+        if ((!is_dir)) && [[ -n $ext ]]; then
+          shopt -s nocasematch
+          if [[ ${RULE_ARG[i]} == *",$ext,"* ]]; then
+            shopt -u nocasematch
+            MATCHED=$i
+            return 0
+          fi
+          shopt -u nocasematch
+        fi ;;
+      glob) re=${RULE_ARG[i]}; [[ $p =~ $re ]] && { MATCHED=$i; return 0; } ;;
+      any) MATCHED=$i; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# The name notes use for the tool: the first word of the rule's command.
+rule_tool_name() {
+  local i=$1
+  case "${RULE_MODE[i]}" in
+    open) printf 'open' ;;
+    *) tokenize "${RULE_CMD[i]}" && printf '%s' "${TOKS[0]}" ;;
+  esac
+}
+
+# --- @open loop protection -------------------------------------------------
+#
+# These associations point at NvimHere.app, so `open` on a file this app claims
+# comes straight back here: open -> app -> cli-here -> open, forever. There is
+# no environment to carry a re-entry flag through LaunchServices, so ask the
+# system which app would open the path and never hand it our own bundle.
+SELF_BUNDLE_ID=dev.andy.nvimhere
+SELF_APP="$HOME/Applications/NvimHere.app"
+
+JXA_HANDLER='
+ObjC.import("AppKit");
+function run(argv) {
+  const app = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL(
+    $.NSURL.fileURLWithPath(argv[0]));
+  if (app.isNil()) return "";
+  const bundle = $.NSBundle.bundleWithURL(app);
+  const id = bundle.isNil() ? null : bundle.bundleIdentifier;
+  return (id && !id.isNil()) ? id.js : app.path.js;
+}
+'
+
+# The bundle id (or the path, when there is no readable id) of the app that
+# would open PATH, empty when no app claims it. CLI_HERE_HANDLER replaces the
+# query so the fallback paths can be tested without touching LaunchServices.
+handler_for() {
+  if [[ ${CLI_HERE_HANDLER+set} ]]; then
+    printf '%s' "$CLI_HERE_HANDLER"
+    return 0
+  fi
+  osascript -l JavaScript -e "$JXA_HANDLER" "$1" 2>/dev/null || true
+}
+
+is_self_handler() {
+  [[ -n $1 && ( $1 == "$SELF_BUNDLE_ID" || $1 == "$SELF_APP" ) ]]
+}
+
+OPEN_BIN=""
+ensure_open_bin() {
+  [[ -n $OPEN_BIN ]] && return 0
+  OPEN_BIN="$(type -P open || true)"
+  if [[ -z $OPEN_BIN ]]; then
+    echo "$PROG: open not found in PATH" >&2
+    exit 1
+  fi
+}
+
+# --- grouping --------------------------------------------------------------
+#
+# Every path gets a rule, then the paths are grouped by that rule in order of
+# first appearance. What a group turns into depends on the action:
+#
+#   surface/run  one action per group when the template takes {files} or no
+#                placeholder at all, one action per file when it takes {file}
+#                or {loc}
+#   open         one action per file, because two files can belong to two
+#                different apps and only some of them loop back here
+
+template_is_per_file() {
+  [[ $1 == *'{file}'* || $1 == *'{loc}'* ]]
+}
+
+note_ignored_flags() { # note_ignored_flags run|open
+  if [[ $MODE == window ]]; then
+    note "--new-window is ignored for @$1"
+  elif [[ $MODE == split ]]; then
+    note "--split is ignored for @$1"
+  fi
+  if [[ $1 == run && $BG -eq 1 ]]; then
+    note "--background is ignored for @run"
+  fi
+}
+
+# emit_one MODE RULE-INDEX LABEL : the action for a surface or run group
+emit_one() {
+  if [[ $1 == surface ]]; then
+    plan_add surface "$MODE" "$SPLIT_DIR" "$BG" "$HOLD" "$SURFACE_CWD" "$3" \
+      "${RULE_NAME[$2]}" -- "${ARGV[@]}"
+  else
+    plan_add run "" "" "$BG" 0 "$DIR" "$3" "${RULE_NAME[$2]}" -- "${ARGV[@]}"
+  fi
+}
+
+emit_group() {
+  local r=$1 i k tool mode label first_line first_col h
+  local -a members=() lines=() cols=() open_argv=()
+
+  for ((i = 0; i < ${#PATHS[@]}; i++)); do
+    [[ ${PATH_RULE[i]} -eq $r ]] || continue
+    members+=("${PATHS[i]}")
+    lines+=("${SPEC_LINE[i]}")
+    cols+=("${SPEC_COL[i]}")
+  done
+
+  tool="$(rule_tool_name "$r")"
+  mode=${RULE_MODE[r]}
+
+  if [[ $mode == open ]]; then
+    ensure_open_bin
+    for ((k = 0; k < ${#members[@]}; k++)); do
+      if [[ ! -e ${members[k]} ]]; then
+        echo "$PROG: ${members[k]} does not exist" >&2
+        exit 1
+      fi
+      h="$(handler_for "${members[k]}")"
+      if is_self_handler "$h"; then
+        note "${members[k]} is handled by NvimHere itself; opening nvim instead"
+        build_action "$BUILTIN_ACTION" "${lines[k]}" "${cols[k]}" "$DIR" \
+          "${members[k]}"
+        plan_add surface "$MODE" "$SPLIT_DIR" "$BG" "$HOLD" "$SURFACE_CWD" \
+          "$(basename "${members[k]}")" "${RULE_NAME[r]}" -- "${ARGV[@]}"
+      elif [[ -z $h ]]; then
+        echo "$PROG: no app claims ${members[k]}; add a rule for it" >&2
+        exit 1
+      else
+        open_argv=("$OPEN_BIN")
+        if ((BG)); then open_argv+=(-g); fi
+        open_argv+=("${members[k]}")
+        plan_add open "" "" "$BG" 0 "" "$(basename "${members[k]}")" \
+          "${RULE_NAME[r]}" -- "${open_argv[@]}"
+      fi
+    done
+    return 0
+  fi
+
+  # A missing file is fine for a surface (the tool creates it) but not for
+  # @run, which has nothing useful to do with a path that is not there.
+  for ((k = 0; k < ${#members[@]}; k++)); do
+    if [[ ! -e ${members[k]} ]]; then
+      if [[ $mode == run ]]; then
+        echo "$PROG: ${members[k]} does not exist" >&2
+        exit 1
+      fi
+      note "${members[k]} does not exist, $tool will create it"
+    fi
+  done
+
+  if template_is_per_file "${RULE_CMD[r]}"; then
+    for ((k = 0; k < ${#members[@]}; k++)); do
+      build_action "${RULE_CMD[r]}" "${lines[k]}" "${cols[k]}" "$DIR" \
+        "${members[k]}"
+      emit_one "$mode" "$r" "$(basename "${members[k]}")"
+    done
+    return 0
+  fi
+
+  # One action for the whole group. The jump belongs to its first file; any
+  # later line number is dropped and named, exactly as before grouping.
+  for ((k = 1; k < ${#members[@]}; k++)); do
+    if [[ -n ${lines[k]} ]]; then
+      note ":${lines[k]} belongs to ${members[k]}, but $tool applies it to ${members[0]}"
+    fi
+  done
+  first_line=""
+  first_col=""
+  if [[ ${#members[@]} -gt 0 ]]; then
+    first_line=${lines[0]}
+    first_col=${cols[0]}
+  fi
+  build_action "${RULE_CMD[r]}" "$first_line" "$first_col" "$DIR" \
+    ${members[@]+"${members[@]}"}
+
+  # Tab title. These surfaces never run a shell, so Ghostty has no shell
+  # integration title to fall back on and shows its 👻 placeholder forever.
+  # Name the surface after whatever was opened instead; nvim does not set a
+  # title of its own unless `set title` is on, so this is not shadowing
+  # anything.
+  if [[ ${#members[@]} -gt 0 ]]; then
+    label="$(basename "${members[0]}")"
+    if [[ ${#members[@]} -gt 1 ]]; then
+      label="$label +$(( ${#members[@]} - 1 ))"
+    fi
+  else
+    label="$(basename "$DIR")"
+  fi
+  emit_one "$mode" "$r" "$label"
+}
+
+emit_all_groups() {
+  local i j r seen
+  local -a order=()
+  for ((i = 0; i < ${#PATHS[@]}; i++)); do
+    r=${PATH_RULE[i]}
+    seen=0
+    for ((j = 0; j < ${#order[@]}; j++)); do
+      if [[ ${order[j]} -eq $r ]]; then seen=1; break; fi
+    done
+    if ((!seen)); then order+=("$r"); fi
+  done
+  for ((j = 0; j < ${#order[@]}; j++)); do
+    emit_group "${order[j]}"
+  done
+}
+
+build_plan() {
+  build_surface_env
+
+  if [[ $FROM_LS -eq 1 ]]; then
+    # `do shell script` starts in /, so there is no cwd to pass on: the surface
+    # keeps Ghostty's default and {dir} is taken from the first file below.
+    SURFACE_CWD=""
+  else
+    # Ghostty spawns `command` in its own working directory, so -C and every
+    # file path have to be absolute before they reach the shell string.
+    if [[ "$DIR" != /* ]]; then DIR="$PWD/$DIR"; fi
+    if ! DIR_PHYSICAL="$(cd "$DIR" 2>/dev/null && pwd -P)"; then
+      echo "$PROG: not a directory: $DIR" >&2
+      exit 2
+    fi
+    DIR="$DIR_PHYSICAL"
+    SURFACE_CWD=$DIR
+  fi
+
+  load_rules
+
+  # With a rule table, no arguments means the working directory: that is how
+  # `cli-here` opens a file manager. nvim-here keeps opening an empty buffer.
+  if [[ $RULES_FROM_CONFIG -eq 1 && ${#SPECS[@]} -eq 0 ]]; then
+    SPECS=("$DIR")
+  fi
+
+  plan_paths
+
+  if [[ $FROM_LS -eq 1 ]]; then
+    # {dir} is the folder of what was opened, which is what a `yazi {dir}`-style
+    # rule means when the click came from Finder.
+    if [[ ${#PATHS[@]} -gt 0 ]]; then
+      DIR="$(dirname "${PATHS[0]}")"
+    else
+      DIR=$PWD
+    fi
+  fi
+
+  local i has_run=0 has_open=0
+  PATH_RULE=()
+  for ((i = 0; i < ${#PATHS[@]}; i++)); do
+    match_rule "${PATHS[i]}" || {
+      echo "$PROG: no rule matched ${PATHS[i]}" >&2
+      exit 1
+    }
+    PATH_RULE+=("$MATCHED")
+  done
+
+  if [[ ${#PATHS[@]} -eq 0 ]]; then
+    # Nothing named: the working directory picks the rule, and a template that
+    # wants {files} simply gets none.
+    match_rule "$DIR" || {
+      echo "$PROG: no rule matched $DIR" >&2
+      exit 1
+    }
+    emit_group "$MATCHED"
+  else
+    emit_all_groups
+  fi
+
+  for ((i = 0; i < ${#PLAN_KIND[@]}; i++)); do
+    case ${PLAN_KIND[i]} in
+      run) has_run=1 ;;
+      open) has_open=1 ;;
+    esac
+  done
+  if ((has_run)); then note_ignored_flags run; fi
+  if ((has_open)); then note_ignored_flags open; fi
+}
+
+# --- printing -------------------------------------------------------------
+
+# One line per value, so a path containing a newline cannot fake a new field.
+esc() {
+  local s=$1
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  printf '%s' "$s"
+}
+
+print_plan() {
+  local i off n j mode extra
+  if [[ ${#PLAN_KIND[@]} -eq 0 ]]; then
+    echo "empty plan"
+    return 0
+  fi
+  for ((i = 0; i < ${#PLAN_KIND[@]}; i++)); do
+    case "${PLAN_KIND[i]}" in
+      surface)
+        mode="${PLAN_MODE[i]}"
+        [[ "$mode" == split ]] && mode="split/${PLAN_SPLIT[i]}"
+        extra=""
+        if [[ ${PLAN_HOLD[i]} == 1 ]]; then extra=" hold=1"; fi
+        printf 'surface mode=%s bg=%s%s cwd=%s label=%s rule=%s\n' \
+          "$mode" "${PLAN_BG[i]}" "$extra" "$(esc "${PLAN_CWD[i]}")" \
+          "$(esc "${PLAN_LABEL[i]}")" "${PLAN_RULE[i]}" ;;
+      run)  printf 'run cwd=%s rule=%s\n' "$(esc "${PLAN_CWD[i]}")" "${PLAN_RULE[i]}" ;;
+      open) printf 'open rule=%s\n' "${PLAN_RULE[i]}" ;;
+    esac
+    off=${PLAN_ARGV_OFF[i]}
+    n=${PLAN_ARGV_N[i]}
+    for ((j = 0; j < n; j++)); do
+      printf '  %s\n' "$(esc "${PLAN_ARGV[off + j]}")"
+    done
+  done
+}
+
+# --- execution ------------------------------------------------------------
+
+find_ghostty() {
+  local candidate
+  for candidate in /Applications/Ghostty.app "$HOME/Applications/Ghostty.app"; do
+    if [[ -d "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+execute_plan() {
+  local i off n start count rc ghostty_ready=0
+  local -a tail_args=()
+  for ((i = 0; i < ${#PLAN_KIND[@]}; i++)); do
+    off=${PLAN_ARGV_OFF[i]}
+    n=${PLAN_ARGV_N[i]}
+    start=$((off + 1))
+    count=$((n - 1))
+    tail_args=()
+    if [[ $count -gt 0 ]]; then tail_args=("${PLAN_ARGV[@]:start:count}"); fi
+
+    case "${PLAN_KIND[i]}" in
+      surface)
+        if [[ $ghostty_ready -eq 0 ]]; then
+          if ! find_ghostty >/dev/null; then
+            echo "$PROG: Ghostty.app not found in /Applications or ~/Applications" >&2
+            exit 1
+          fi
+          ghostty_ready=1
+        fi
+        # Silent on success: the caller is usually an agent that only cares
+        # about the exit code. AppleScript errors still reach stderr.
+        osascript - "${PLAN_ARGV[off]}" "${PLAN_CWD[i]}" "${PLAN_MODE[i]}" \
+          "${PLAN_SPLIT[i]}" "${PLAN_BG[i]}" "${PLAN_LABEL[i]}" \
+          "${PLAN_HOLD[i]}" "$SURFACE_PATH_ASSIGN" "$SURFACE_EDITOR_ASSIGN" \
+          ${tail_args[@]+"${tail_args[@]}"} >/dev/null <<'APPLESCRIPT' || exit 1
+-- Mirror of src/NvimHere.applescript, minus LaunchServices. Arguments arrive as
+-- argv, so every path is quoted by AppleScript itself instead of by the shell.
+--
+-- argv: tool, cwd, mode, split, bg, label, hold, PATH assignment, EDITOR
+-- assignment, then the tool's own arguments. An empty cwd means "leave the
+-- surface where Ghostty puts it"; an empty assignment means "do not set it".
+on run argv
+	set toolPath to item 1 of argv
+	set workDir to item 2 of argv
+	set mode to item 3 of argv
+	set splitDir to item 4 of argv
+	set bg to (item 5 of argv) is "1"
+	set label to item 6 of argv
+	set hold to (item 7 of argv) is "1"
+
+	set cmd to quoted form of toolPath
+	repeat with i from 10 to (count of argv)
+		set cmd to cmd & " " & quoted form of (item i of argv)
+	end repeat
+
+	tell application "Ghostty"
+		set cfg to new surface configuration
+		-- Ghostty runs `command` as `exec -l <string>`, so `cd x && nvim` never
+		-- starts anything: `cd` is a builtin and there is no shell left to chain
+		-- with. The working directory has to come from here instead.
+		if workDir is not "" then set initial working directory of cfg to workDir
+		set command of cfg to cmd
+		if hold then set wait after command of cfg to true
+
+		set envItems to {}
+		if item 8 of argv is not "" then set end of envItems to (item 8 of argv)
+		if item 9 of argv is not "" then set end of envItems to (item 9 of argv)
+		if (count of envItems) > 0 then set environment variables of cfg to envItems
+		try
+			set w to front window
+		on error
+			set w to missing value
+		end try
+
+		-- No front window (or a window of its own): nothing to be quiet about.
+		if w is missing value or mode is "window" then
+			activate
+			new window with configuration cfg
+			return
+		end if
+
+		if not bg then activate
+
+		if mode is "split" then
+			set target to focused terminal of (selected tab of w)
+			if splitDir is "down" then
+				set newTerm to split target direction down with configuration cfg
+			else if splitDir is "up" then
+				set newTerm to split target direction up with configuration cfg
+			else if splitDir is "left" then
+				set newTerm to split target direction left with configuration cfg
+			else
+				set newTerm to split target direction right with configuration cfg
+			end if
+			set name override of newTerm to label
+			if bg then
+				-- A split is always visible, so quiet means "don't move my cursor":
+				-- walk back through the split edge we just created.
+				if splitDir is "down" then
+					perform action "goto_split:up" on newTerm
+				else if splitDir is "up" then
+					perform action "goto_split:down" on newTerm
+				else if splitDir is "left" then
+					perform action "goto_split:right" on newTerm
+				else
+					perform action "goto_split:left" on newTerm
+				end if
+			end if
+			return
+		end if
+
+		-- A new tab always becomes the selected one; put the old one back.
+		set prevTab to selected tab of w
+		set newTab to new tab in w with configuration cfg
+		set name override of newTab to label
+		if bg then select tab prevTab
+	end tell
+end run
+APPLESCRIPT
+        ;;
+      run)
+        # No terminal: run it here and wait, then pass the exit code through so
+        # a rule like `@run shfmt -w {files}` can be used from a hook.
+        rc=0
+        ( cd "${PLAN_CWD[i]}" && exec "${PLAN_ARGV[@]:off:n}" ) || rc=$?
+        if [[ $rc -ne 0 ]]; then exit $rc; fi ;;
+      open)
+        "${PLAN_ARGV[@]:off:n}" || exit 1 ;;
+    esac
+  done
+}
+
+# Sourcing this file defines the functions without running anything, so
+# tests/template.sh can exercise the pure parts directly.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  parse_args "$@"
+  build_plan
+  if [[ $DRY_RUN -eq 1 ]]; then
+    print_plan
+    exit 0
+  fi
+  execute_plan
+fi

@@ -1,0 +1,1165 @@
+# behaviour snapshot through GNU bash, version 3.2.57(1)-release (arm64-apple-darwin26)
+# entry: nvim-here
+
+### no-args
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 11
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = work
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+### help
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out:
+  | usage: nvim-here [-C DIR] [-w | --split[=DIR]] [-b] [--hold] [--dry-run] [--] [FILE[:LINE[:COL]]...]
+  | 
+  |   -C, --dir DIR    cd into DIR before starting nvim (default: current directory)
+  |   -w, --new-window open a new window instead of a new tab
+  |   -s, --split[=DIR] split the focused pane instead of opening a tab;
+  |                    DIR is right (default, like Cmd+D), down, left or up
+  |   -b, --background create the surface without taking the keyboard: a tab stays
+  |                    unselected, a split hands focus back to the original pane
+  |   -n, --dry-run    print the plan instead of opening anything
+  |   --hold           keep the surface open after the command exits, so a tool
+  |                    that crashes on startup leaves its output on screen
+  |   -h, --help       this text
+  | 
+  | No FILE arguments opens nvim with an empty buffer.
+  | FILE may be a directory. Paths are passed to nvim as absolute paths.
+err: (empty)
+stdin: no
+### help-long
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out:
+  | usage: nvim-here [-C DIR] [-w | --split[=DIR]] [-b] [--hold] [--dry-run] [--] [FILE[:LINE[:COL]]...]
+  | 
+  |   -C, --dir DIR    cd into DIR before starting nvim (default: current directory)
+  |   -w, --new-window open a new window instead of a new tab
+  |   -s, --split[=DIR] split the focused pane instead of opening a tab;
+  |                    DIR is right (default, like Cmd+D), down, left or up
+  |   -b, --background create the surface without taking the keyboard: a tab stays
+  |                    unselected, a split hands focus back to the original pane
+  |   -n, --dry-run    print the plan instead of opening anything
+  |   --hold           keep the surface open after the command exits, so a tool
+  |                    that crashes on startup leaves its output on screen
+  |   -h, --help       this text
+  | 
+  | No FILE arguments opens nvim with an empty buffer.
+  | FILE may be a directory. Paths are passed to nvim as absolute paths.
+err: (empty)
+stdin: no
+### ddash-only
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 11
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = work
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+### unknown-opt
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: unknown option: -x (pass -- before files starting with -)
+stdin: no
+### unknown-opt-after-file
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: unknown option: -z (pass -- before files starting with -)
+stdin: no
+### ddash-dashfile
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = -dash.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/-dash.md
+### ddash-then-looking-like-flag
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err:
+  | nvim-here: note: <ROOT>/work/-b does not exist, nvim will create it
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = -b +1
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/-b
+argv[12] = <ROOT>/work/a.md
+### one-file
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### one-file-abs
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### one-file-tilde
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = x.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <HOME>/x.md
+### one-file-dotdot
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/../work/a.md
+### dir-arg
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = dir
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/dir
+### dir-arg-slash
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = dir
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/dir/
+### noext
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = Makefile
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/Makefile
+### dotfile
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = .gitignore
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/.gitignore
+### trailing-dot
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = trail.
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/trail.
+### nonexistent
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err:
+  | nvim-here: note: <ROOT>/work/nope.ts does not exist, nvim will create it
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = nope.ts
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/nope.ts
+### nonexistent-with-line
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err:
+  | nvim-here: note: <ROOT>/work/nope.ts:9 does not exist, nvim will create it
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = nope.ts:9
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/nope.ts:9
+### two-files
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md +1
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+argv[12] = <ROOT>/work/b.py
+### many
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err:
+  | nvim-here: note: <ROOT>/work/nope.ts does not exist, nvim will create it
+stdin: yes
+argc: 17
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md +5
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+argv[12] = <ROOT>/work/b.py
+argv[13] = <ROOT>/work/src/foo.ts
+argv[14] = <ROOT>/work/dir
+argv[15] = <ROOT>/work/test:2024.log
+argv[16] = <ROOT>/work/nope.ts
+### line
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = foo.ts
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +42
+argv[11] = --
+argv[12] = <ROOT>/work/src/foo.ts
+### line-col
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 14
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = foo.ts
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +42
+argv[11] = +call cursor(42,7)
+argv[12] = --
+argv[13] = <ROOT>/work/src/foo.ts
+### line-zero
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = foo.ts
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +0
+argv[11] = --
+argv[12] = <ROOT>/work/src/foo.ts
+### line-leading-zero
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = foo.ts
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +007
+argv[11] = --
+argv[12] = <ROOT>/work/src/foo.ts
+### colon-name
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = test:2024.log
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/test:2024.log
+### colon-name-with-line
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = test:2024.log
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +12
+argv[11] = --
+argv[12] = <ROOT>/work/test:2024.log
+### two-files-line-first
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 14
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md +1
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = +3
+argv[11] = --
+argv[12] = <ROOT>/work/a.md
+argv[13] = <ROOT>/work/b.py
+### two-files-line-second
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err:
+  | nvim-here: note: :7 belongs to <ROOT>/work/b.py, but nvim applies it to <ROOT>/work/a.md
+stdin: yes
+argc: 13
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md +1
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+argv[12] = <ROOT>/work/b.py
+### spaces
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = weird name.txt
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/weird name.txt
+### cjk
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = 中文 é.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/中文 é.md
+### singlequote
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = single'quote.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/single'quote.md
+### dollar
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = with$dollar.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/with$dollar.md
+### brace
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = {line}.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/{line}.md
+### amp
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a&b.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a&b.md
+### backtick
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = back`tick.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/back`tick.md
+### newline
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = new\nline.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/new\nline.md
+### bg
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 1
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### bg-long
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 1
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### window
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = window
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### window-long
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = window
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### window-no-file
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 11
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = window
+argv[4] = right
+argv[5] = 0
+argv[6] = work
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+### split
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-long
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-down
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = down
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-up
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = up
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-left
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = left
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-right
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### split-bogus
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: unknown split direction: diagonal (right, left, up, down)
+stdin: no
+### bg-split
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = split
+argv[4] = down
+argv[5] = 1
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### conflict-w-s
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: --split conflicts with --new-window
+stdin: no
+### conflict-s-w
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: --new-window conflicts with --split
+stdin: no
+### conflict-w-split-up
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: --split conflicts with --new-window
+stdin: no
+### dir-flag
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work/sub
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### dir-flag-abs
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work/dir
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### dir-flag-dotdot
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### dir-flag-symlink
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work/sub
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### dir-flag-twice
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work/sub
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md
+### dir-flag-missing-value
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: -C needs a value
+stdin: no
+### dir-flag-nonexistent
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: not a directory: <ROOT>/work/nope
+stdin: no
+### dir-flag-is-file
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 2
+out: (empty)
+err:
+  | nvim-here: not a directory: <ROOT>/work/a.md
+stdin: no
+### nvim-missing
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 1
+out: (empty)
+err:
+  | nvim-here: nvim not found in PATH
+stdin: no
+### direct-invocation
+cwd: <ROOT>/work
+entry: nvim-here
+exit: 0
+out: (empty)
+err: (empty)
+stdin: yes
+argc: 12
+argv[0] = -
+argv[1] = <STUB>/nvim
+argv[2] = <ROOT>/work
+argv[3] = tab
+argv[4] = right
+argv[5] = 0
+argv[6] = a.md
+argv[7] = 0
+argv[8] = PATH=<STUB>:/usr/bin:/bin:/usr/sbin:/sbin
+argv[9] = EDITOR=nvim
+argv[10] = --
+argv[11] = <ROOT>/work/a.md

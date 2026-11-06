@@ -1,15 +1,18 @@
--- NvimHere: a LaunchServices shim that opens files in Neovim
--- inside a new tab of the frontmost Ghostty window.
+-- NvimHere: a LaunchServices shim that hands files to cli-here.
 --
--- __NVIM__ is replaced with an absolute path at install time,
--- because LaunchServices launches us with a minimal PATH.
+-- Everything that decides what happens lives in bin/cli-here, so changing the
+-- rules never means rebuilding this bundle. A LaunchServices launch has no
+-- usable PATH, no EDITOR and a working directory of /, so install.sh bakes all
+-- four values in at compile time:
+--
+--   __CLI_HERE__   absolute path of bin/cli-here
+--   __NVIM_HERE__  absolute path of bin/nvim-here (the config-free entry point)
+--   __PATH__       the PATH to give the CLI, and the surfaces it opens
+--   __EDITOR__     the same for EDITOR
 
 on run
-	try
-		openInNvim({})
-	on error errMsg number errNum
-		logError("run: " & errNum & " " & errMsg)
-	end try
+	-- Double-clicking the app opens nvim with an empty buffer, as it always did.
+	forward("__NVIM_HERE__ --", {})
 end run
 
 on open theFiles
@@ -17,59 +20,31 @@ on open theFiles
 	repeat with f in theFiles
 		set end of paths to POSIX path of f
 	end repeat
-	try
-		openInNvim(paths)
-	on error errMsg number errNum
-		logError("open: " & errNum & " " & errMsg)
-	end try
+	forward("__CLI_HERE__ --from-ls --", paths)
 end open
 
-on openInNvim(paths)
-	set cmd to "__NVIM__"
-	set label to "nvim"
-	if (count of paths) > 0 then
-		set cmd to cmd & " --"
-		repeat with p in paths
-			set cmd to cmd & " " & quoted form of p
-		end repeat
-		-- Tab title. Nothing here runs a shell, so Ghostty's shell integration never
-		-- reports one and the tab would sit on the 👻 placeholder forever.
-		set label to my basename(item 1 of paths)
-		if (count of paths) > 1 then
-			set label to label & " +" & ((count of paths) - 1)
-		end if
-	end if
-
-	tell application "Ghostty"
-		activate
-		set cfg to new surface configuration
-		set command of cfg to cmd
-		try
-			set w to front window
-		on error
-			set w to missing value
-		end try
-		if w is missing value then
-			new window with configuration cfg
-		else
-			set newTab to new tab in w with configuration cfg
-			set name override of newTab to label
-		end if
-	end tell
-end openInNvim
-
-on basename(p)
-	set AppleScript's text item delimiters to "/"
-	set parts to text items of p
-	set AppleScript's text item delimiters to ""
-	if (count of parts) > 1 and last item of parts is "" then
-		return item -2 of parts
-	end if
-	return last item of parts
-end basename
-
-on logError(msg)
+on forward(program, paths)
+	set cmd to "PATH=" & quoted form of "__PATH__" & " EDITOR=" & quoted form of "__EDITOR__" & " " & program
+	repeat with p in paths
+		set cmd to cmd & " " & quoted form of p
+	end repeat
 	try
-		do shell script "printf '%s\\n' " & quoted form of msg & " >> \"$HOME/Library/Logs/NvimHere.log\""
+		do shell script cmd
+	on error errMsg number errNum
+		reportFailure(errMsg, errNum)
 	end try
-end logError
+end forward
+
+on reportFailure(errMsg, errNum)
+	-- `do shell script` puts the command's stderr in errMsg, so the alert shows
+	-- exactly what the CLI would have printed in a terminal.
+	try
+		do shell script "printf '%s %s\\n' " & quoted form of (errNum as text) & " " & quoted form of errMsg & " >> \"$HOME/Library/Logs/NvimHere.log\""
+	end try
+	try
+		tell application "Ghostty"
+			activate
+			display alert "NvimHere" message errMsg as warning
+		end tell
+	end try
+end reportFailure
